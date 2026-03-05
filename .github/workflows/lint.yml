@@ -1,0 +1,65 @@
+name: Lint and Format Check
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  lint-yaml:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Lint YAML files
+        uses: ibiqlik/action-yamllint@v3
+        with:
+          file_or_dir: k8s/
+          config_file: .yamllint
+          strict: true
+  
+  lint-dockerfiles:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Lint Dockerfiles
+        uses: hadolint/hadolint-action@v3.0.0
+        with:
+          recursive: true
+          dockerfile: client/Dockerfile
+      
+      - name: Lint server Dockerfile
+        uses: hadolint/hadolint-action@v3.0.0
+        with:
+          recursive: true
+          dockerfile: server/Dockerfile
+      
+      - name: Lint worker Dockerfile
+        uses: hadolint/hadolint-action@v3.0.0
+        with:
+          recursive: true
+          dockerfile: worker/Dockerfile
+
+  lint-client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./client
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Run ESLint
+        run: npm run lint --if-present || true

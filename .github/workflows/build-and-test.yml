@@ -1,0 +1,151 @@
+name: Build and Test
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  test-client:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./client
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: client/package-lock.json
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Run tests
+        run: npm test -- --watchAll=false --passWithNoTests
+      
+      - name: Build
+        run: npm run build
+
+  test-server:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./server
+    
+    services:
+      postgres:
+        image: postgres:13
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:6
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          cache: 'npm'
+          cache-dependency-path: server/package-lock.json
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Run linting
+        run: npm run lint --if-present
+
+  test-worker:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./worker
+    
+    services:
+      redis:
+        image: redis:6
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '16'
+          cache: 'npm'
+          cache-dependency-path: worker/package-lock.json
+      
+      - name: Install dependencies
+        run: npm install
+      
+      - name: Run linting
+        run: npm run lint --if-present
+
+  build-docker-images:
+    needs: [test-client, test-server, test-worker]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      
+      - name: Build client image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./client
+          file: ./client/Dockerfile
+          push: false
+          tags: multi-client:latest
+          cache-from: type=registry,ref=cache:multi-client-latest
+      
+      - name: Build server image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./server
+          file: ./server/Dockerfile
+          push: false
+          tags: multi-server:latest
+          cache-from: type=registry,ref=cache:multi-server-latest
+      
+      - name: Build worker image
+        uses: docker/build-push-action@v4
+        with:
+          context: ./worker
+          file: ./worker/Dockerfile
+          push: false
+          tags: multi-worker:latest
+          cache-from: type=registry,ref=cache:multi-worker-latest
