@@ -1,130 +1,54 @@
-name: Build and Deploy to Docker Hub
+name: Deploy
 
 on:
   push:
-    branches: [main]
-    paths:
-      - 'client/**'
-      - 'server/**'
-      - 'worker/**'
-      - '.github/workflows/deploy.yml'
-
-env:
-  REGISTRY: docker.io
-  DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
+    branches: [main, develop]
+  pull_request:
+    branches: [main, develop]
 
 jobs:
-  build-and-push:
+  build-and-deploy:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        service:
-          - name: client
-            dockerfile: ./client/Dockerfile
-          - name: server
-            dockerfile: ./server/Dockerfile
-          - name: worker
-            dockerfile: ./worker/Dockerfile
     
     steps:
       - uses: actions/checkout@v3
       
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: ./client/package-lock.json
+      
+      - name: Build client
+        working-directory: ./client
+        run: |
+          npm ci
+          npm run build
+      
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
       
+      - name: Build Docker images
+        run: |
+          docker build -f client/Dockerfile -t multi-client:latest ./client
+          docker build -f server/Dockerfile -t multi-server:latest ./server
+          docker build -f worker/Dockerfile -t multi-worker:latest ./worker
+      
       - name: Log in to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKER_USERNAME }}
           password: ${{ secrets.DOCKER_PASSWORD }}
       
-      - name: Extract metadata
-        id: meta
-        uses: docker/metadata-action@v4
-        with:
-          images: ${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/multi-${{ matrix.service.name }}
-          tags: |
-            type=ref,event=branch
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=sha,prefix={{branch}}-
-            type=raw,value=latest,enable={{is_default_branch}}
-      
-      - name: Build and push ${{ matrix.service.name }}
-        uses: docker/build-push-action@v4
-        with:
-          context: ./${{ matrix.service.name }}
-          file: ${{ matrix.service.dockerfile }}
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/multi-${{ matrix.service.name }}:buildcache
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ secrets.DOCKER_USERNAME }}/multi-${{ matrix.service.name }}:buildcache,mode=max
-
-  update-kubernetes:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Update Kubernetes manifests
+      - name: Push to Docker Hub
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: |
-          set -e
-          for file in k8s/client-deployment.yaml k8s/server-deployment.yaml k8s/worker-deployments.yaml; do
-            if grep -q "stephengrider" "$file"; then
-              sed -i "s|stephengrider/multi-client|${{ secrets.DOCKER_USERNAME }}/multi-client:latest|g" "$file"
-              sed -i "s|stephengrider/multi-server|${{ secrets.DOCKER_USERNAME }}/multi-server:latest|g" "$file"
-              sed -i "s|stephengrider/multi-worker|${{ secrets.DOCKER_USERNAME }}/multi-worker:latest|g" "$file"
-            fi
-          done
-          echo "Kubernetes manifests updated"
-      
-      - name: Commit and push changes
-        run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add k8s/
-          git commit -m "Update k8s image references [skip ci]" || echo "No changes to commit"
-          git push
-
-  deploy-to-cluster:
-    needs: build-and-push
-    runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main'
-    
-    steps:
-      - uses: actions/checkout@v3
-      
-      - name: Set up kubectl
-        uses: azure/setup-kubectl@v3
-        with:
-          version: 'latest'
-      
-      - name: Configure kubectl
-        run: |
-          mkdir -p $HOME/.kube
-          echo "${{ secrets.KUBE_CONFIG }}" | base64 -d > $HOME/.kube/config
-          chmod 600 $HOME/.kube/config
-      
-      - name: Deploy to Kubernetes
-        run: |
-          kubectl apply -f k8s/
+          docker tag multi-client:latest ${{ secrets.DOCKER_USERNAME }}/multi-client:latest
+          docker tag multi-server:latest ${{ secrets.DOCKER_USERNAME }}/multi-server:latest
+          docker tag multi-worker:latest ${{ secrets.DOCKER_USERNAME }}/multi-worker:latest
           
-          # Roll out deployment updates
-          kubectl rollout restart deployment/client-deployment
-          kubectl rollout restart deployment/server-deployment
-          kubectl rollout restart deployment/worker-deployment
-          
-          # Wait for rollout to complete
-          kubectl rollout status deployment/client-deployment --timeout=5m
-          kubectl rollout status deployment/server-deployment --timeout=5m
-          kubectl rollout status deployment/worker-deployment --timeout=5m
-      
-      - name: Verify deployment
-        run: |
-          echo "Deployment Status:"
-          kubectl get deployments
-          echo "Running Pods:"
-          kubectl get pods
+          docker push ${{ secrets.DOCKER_USERNAME }}/multi-client:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/multi-server:latest
+          docker push ${{ secrets.DOCKER_USERNAME }}/multi-worker:latest
