@@ -21,10 +21,10 @@ jobs:
         with:
           node-version: '18'
           cache: 'npm'
-          cache-dependency-path: client/package-lock.json
+          cache-dependency-path: ./client/package-lock.json
       
       - name: Install dependencies
-        run: npm install
+        run: npm ci
       
       - name: Run tests
         run: npm test -- --watchAll=false --passWithNoTests
@@ -70,10 +70,9 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: server/package.json
       
       - name: Install dependencies
+        working-directory: ./server
         run: npm install
       
       - name: Run linting
@@ -103,10 +102,9 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
-          cache: 'npm'
-          cache-dependency-path: worker/package.json
       
       - name: Install dependencies
+        working-directory: ./worker
         run: npm install
       
       - name: Run linting

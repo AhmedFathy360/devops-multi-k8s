@@ -54,9 +54,11 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: ./client/package-lock.json
       
       - name: Install dependencies
-        run: npm install
+        run: npm ci
       
       - name: Run ESLint
         run: npm run lint --if-present || true
