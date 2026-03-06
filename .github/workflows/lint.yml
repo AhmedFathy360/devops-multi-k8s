@@ -29,19 +29,16 @@ jobs:
       - name: Lint Dockerfiles
         uses: hadolint/hadolint-action@v3.0.0
         with:
-          recursive: true
           dockerfile: client/Dockerfile
       
       - name: Lint server Dockerfile
         uses: hadolint/hadolint-action@v3.0.0
         with:
-          recursive: true
           dockerfile: server/Dockerfile
       
       - name: Lint worker Dockerfile
         uses: hadolint/hadolint-action@v3.0.0
         with:
-          recursive: true
           dockerfile: worker/Dockerfile
 
   lint-client:

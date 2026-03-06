@@ -71,10 +71,15 @@ jobs:
       
       - name: Update Kubernetes manifests
         run: |
-          # Update image references in k8s deployment files
-          sed -i 's|stephengrider/multi-client|${{ secrets.DOCKER_USERNAME }}/multi-client:latest|g' k8s/client-deployment.yaml
-          sed -i 's|stephengrider/multi-server|${{ secrets.DOCKER_USERNAME }}/multi-server:latest|g' k8s/server-deployment.yaml
-          sed -i 's|stephengrider/multi-worker|${{ secrets.DOCKER_USERNAME }}/multi-worker:latest|g' k8s/worker-deployments.yaml
+          set -e
+          for file in k8s/client-deployment.yaml k8s/server-deployment.yaml k8s/worker-deployments.yaml; do
+            if grep -q "stephengrider" "$file"; then
+              sed -i "s|stephengrider/multi-client|${{ secrets.DOCKER_USERNAME }}/multi-client:latest|g" "$file"
+              sed -i "s|stephengrider/multi-server|${{ secrets.DOCKER_USERNAME }}/multi-server:latest|g" "$file"
+              sed -i "s|stephengrider/multi-worker|${{ secrets.DOCKER_USERNAME }}/multi-worker:latest|g" "$file"
+            fi
+          done
+          echo "Kubernetes manifests updated"
       
       - name: Commit and push changes
         run: |

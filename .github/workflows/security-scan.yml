@@ -71,7 +71,7 @@ jobs:
       - name: Run npm audit for ${{ matrix.service.name }}
         working-directory: ${{ matrix.service.path }}
         run: |
-          npm install
+          npm install --legacy-peer-deps 2>/dev/null || npm install
           npm audit --json > audit.json || true
           npm audit-html --output audit.html || true
       

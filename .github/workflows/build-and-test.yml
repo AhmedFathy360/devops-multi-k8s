@@ -69,9 +69,9 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '16'
+          node-version: '18'
           cache: 'npm'
-          cache-dependency-path: server/package-lock.json
+          cache-dependency-path: server/package.json
       
       - name: Install dependencies
         run: npm install
@@ -102,9 +102,9 @@ jobs:
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
-          node-version: '16'
+          node-version: '18'
           cache: 'npm'
-          cache-dependency-path: worker/package-lock.json
+          cache-dependency-path: worker/package.json
       
       - name: Install dependencies
         run: npm install

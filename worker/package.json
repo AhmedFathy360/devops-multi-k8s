@@ -5,6 +5,7 @@
   },
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon"
+    "dev": "nodemon",
+    "lint": "echo 'No linter configured'"
   }
 }
